@@ -3,11 +3,13 @@
 import rospy
 import numpy as np
 import cv2
-# import torch
+import torch
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from cv_bridge import CvBridge
 import ultralytics
+import uuid
+import json
 
 class GroceryDetection:
     def __init__(self):
@@ -22,6 +24,7 @@ class GroceryDetection:
         self.sub = rospy.Subscriber(image_topic, Image, self.image_callback, queue_size=1, buff_size=10000000)
         self.sub2 = rospy.Subscriber(depth_topic, Image, self.depth_callback, queue_size=1, buff_size=10000000)
         self.depth_image = None  
+        self.CONFIDENCE_THRESHOLD = 0.5
 
     def depth_callback(self, msg):
         # try:
@@ -36,7 +39,11 @@ class GroceryDetection:
         # bridge = CvBridge()
         # depth_image = bridge.imgmsg_to_cv2(img_msg=msg, desired_encoding='passthrough')
         self.depth_image = CvBridge().imgmsg_to_cv2(msg, "passthrough")
-        print(f"Instant Depth: {self.depth_image}")
+        # self.depth_image = np.array(depthImg)
+        
+        
+        # depth = np.median(img_depth[v1:v2+1, u1:u2+1])
+        # print(f"Instant Depth: {self.depth_image}")
 
 
             # Determine the correct dtype based on the encoding
@@ -71,7 +78,7 @@ class GroceryDetection:
         cv_image = CvBridge().imgmsg_to_cv2(msg, "bgr8")
 
         # Inference
-        results = self.model(cv_image)
+        results = self.model.track(cv_image, persist=True)
         rospy.loginfo("Detection completed, processing results")
 
         # Assuming results is a list of Results objects
@@ -81,48 +88,53 @@ class GroceryDetection:
             
             # Process detection boxes
             for box in boxes:
-                xyxy = box.xyxy # .numpy() if isinstance(box.xyxy, torch.Tensor) else box.xyxy
-                conf = box.conf.item()  # Assuming conf is a tensor with a single value
-                cls = box.cls.item()  # Assuming cls is a tensor with a single value
-                class_name = result.names[int(cls)]
-                
+                conf = box.conf.item()
+                if conf >= self.CONFIDENCE_THRESHOLD:
+                    xyxy = box.xyxy.numpy() if isinstance(box.xyxy, torch.Tensor) else box.xyxy
+                    # Assuming conf is a tensor with a single value
+                    cls = box.cls.item()  # Assuming cls is a tensor with a single value
+                    class_name = result.names[int(cls)]
+                    
 
-                # Ensure xyxy is flattened to a 1D array if it's not already
-                if xyxy.ndim > 1:
-                    xyxy = xyxy.flatten()
+                    # Ensure xyxy is flattened to a 1D array if it's not already
+                    if xyxy.ndim > 1:
+                        xyxy = xyxy.flatten()
 
-                x1, y1, x2, y2 = map(int, xyxy)
+                    x1, y1, x2, y2 = map(int, xyxy)
 
-                grocery_detected_depth = self.depth_image[y1:y2, x1:x2]
-                median_distance = np.median(grocery_detected_depth) / 1000
+                    # grocery_detected_depth = self.depth_image[y1:y2, x1:x2]
+                    # median_distance = np.median(grocery_detected_depth) / 1000
 
-                # Assuming depth_image is the correctly reshaped depth data array
-                if self.depth_image is not None:
-                    # Extract the depth values within the bounding box
-                    depth_region = self.depth_image[x1:x2, y1:y2]
-                    valid_depths = depth_region[~np.isnan(depth_region)]  # Filter out NaN values
+                    # Assuming depth_image is the correctly reshaped depth data array
+                    if self.depth_image is not None:
+                        # Extract the depth values within the bounding box
+                        depth_region = self.depth_image[x1:x2, y1:y2]
+                        valid_depths = depth_region[~np.isnan(depth_region)]  # Filter out NaN values
 
-                    if valid_depths.size > 0:
-                        median_distance = np.nanmedian(valid_depths)
-                        rospy.loginfo("Median distance: %.2f meters" % median_distance)
+                        if valid_depths.size > 0:
+                            median_distance = np.nanmedian(valid_depths) / 1000
+                            rospy.loginfo("Median distance: %.2f meters" % median_distance)
+                        else:
+                            rospy.logwarn("No valid depth data available within the detection region.")
                     else:
-                        rospy.logwarn("No valid depth data available within the detection region.")
-                else:
-                    rospy.logwarn("Depth image is not available.")
+                        rospy.logwarn("Depth image is not available.")
 
 
-                # Extract coordinatesx1:x2, y1:y2
-                
-                cv2.rectangle(cv_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                label = ("%s %.2f %.2f" % (class_name,conf,median_distance))
-                cv2.putText(cv_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                    # Extract coordinatesx1:x2, y1:y2
+                    
+                    cv2.rectangle(cv_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    label = ("%s %.2f %.2f" % (class_name,conf,median_distance))
+                    cv2.putText(cv_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-                # Prepare the message
-                detection_message = ("Detected %s with confidence %.2f at [%d , %d , %d , %d], distance %.2f meter" % (class_name, conf,x1,x2,y1,y2,median_distance))
-                rospy.loginfo(detection_message)
-                
-                # Publish the message
-                self.detection_publisher.publish(detection_message)
+                    # Prepare the message
+                    detection_message = ("Detected %s with confidence %.2f at [%d , %d , %d , %d], distance %.2f meter" % (class_name, conf,x1,x2,y1,y2,median_distance))
+                    rospy.loginfo(detection_message)
+
+                    bounding_box = {'conf': conf, 'xmin': x1, 'ymin': y1, 'xmax': x2, 'ymax': y2, 'id': str(uuid.uuid4()), 'Class': class_name}
+                    bounding_box = json.dumps(bounding_box)
+                    
+                    # Publish the message
+                    self.detection_publisher.publish(bounding_box)
 
         else:
             rospy.loginfo("No detections")

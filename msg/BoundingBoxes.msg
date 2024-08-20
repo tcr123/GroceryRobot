@@ -1,3 +1,3 @@
 Header header
 Header image_header
-BoundingBox[] bounding_boxes
+BoundingBox bounding_boxes
