@@ -105,6 +105,7 @@ class getBoundingBoxDistance():
                 self.cmd_vel_Pub.publish(self.cmd_vel)
                 self.reached_person = True
 
+    
 
 if __name__ == '__main__':
     try:

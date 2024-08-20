@@ -1,0 +1,59 @@
+<launch>
+
+  <arg name="multi_robot_name" default=""/>
+  <arg name="set_lidar_frame_id" default="base_scan"/>
+  <arg name="model" default="$(env JUPITER2_MODEL)" doc="model type [lite, pro]"/>
+
+  <include file="$(find jupiterobot2_bringup)/launch/jupiterobot2_core.launch">
+    <arg name="multi_robot_name" value="$(arg multi_robot_name)"/>
+  </include>
+  <include file="$(find jupiterobot2_bringup)/launch/jupiterobot2_lidar.launch">
+    <arg name="set_frame_id" value="$(arg set_lidar_frame_id)"/>
+  </include>
+  
+  <include file="$(find jupiterobot2_bringup)/launch/includes/description.launch.xml">
+    <arg name="model" value="$(arg model)"/>
+  </include>
+  <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
+    <param name="publish_frequency" type="double" value="50.0"/>
+    <param name="tf_prefix" value="$(arg multi_robot_name)"/>
+  </node>
+
+  <node pkg="turtlebot3_bringup" type="turtlebot3_diagnostics" name="turtlebot3_diagnostics" output="screen"/>
+  
+  
+
+
+  <!--  -->
+
+  <!-- Arguments -->
+  <arg name="map_file" default="/home/mustar/catkin_ws/maps/test1.yaml"/>
+  <arg name="open_rviz" default="true"/>
+  <arg name="move_forward_only" default="false"/>
+
+  <!-- Map server -->
+  <node pkg="map_server" name="map_server" type="map_server" args="$(arg map_file)"/>
+
+  <!-- AMCL -->
+  <include file="$(find jupiterobot2_navigation)/launch/includes/amcl.launch"/>
+
+  <!-- move_base -->
+  <include file="$(find jupiterobot2_navigation)/launch/includes/move_base.launch">
+    <arg name="move_forward_only" value="$(arg move_forward_only)"/>
+  </include>
+
+  <!-- rviz -->
+  <group if="$(arg open_rviz)"> 
+    <node pkg="rviz" type="rviz" name="rviz" required="true"
+          args="-d $(find jupiterobot2_navigation)/rviz/navigation.rviz"/>
+  </group>
+
+
+
+
+
+
+  <node name="navi_point" pkg="grocery" type="navigation.py" output="screen"/>
+
+</launch>
+
