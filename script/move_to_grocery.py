@@ -19,22 +19,20 @@ class getBoundingBoxDistance():
         self.size = 30
         self.is_centered = [None] * self.size
         self.is_reached_person = [None] * self.size
-        rospy.init_node('get_distance')
-        self.cmd_vel_Pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-        depth_topic = rospy.get_param('~depth_topic', '/camera/depth/image_raw')
-        self.depth_sub = rospy.Subscriber(depth_topic, Image, self.depth_callback, queue_size=1, buff_size=10000000)
-        rospy.sleep(1)
-        self.yolo_sub = rospy.Subscriber('/detection_results', String, self.bounding_box)
-        self.yolo_sub2 = rospy.Subscriber('/detection_results2', String, self.move_robot)
-        rospy.sleep(1)
         self.first_signal = False
         self.second_signal = False
-        # self.final_move = rospy.Publisher('task_status', String, queue_size=10)
-        self.arm_move = rospy.Publisher('arm_status', String, queue_size=10)
         self.index = 0
         self.threshold_circular_distance = 20 # in unit mm
         self.threshold_distance = 0.7 # in unit m
+        
+        rospy.init_node('get_distance')
+        self.cmd_vel_Pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
         self.distance_pub = rospy.Publisher('distance_check', String, queue_size=10)
+        self.arm_move = rospy.Publisher('arm_status', String, queue_size=10)
+        depth_topic = rospy.get_param('~depth_topic', '/camera/depth/image_raw')
+        self.depth_sub = rospy.Subscriber(depth_topic, Image, self.depth_callback, queue_size=1, buff_size=10000000)
+        self.yolo_sub = rospy.Subscriber('/detection_results', String, self.bounding_box)
+        self.yolo_sub2 = rospy.Subscriber('/detection_results2', String, self.move_robot)
 
     def text2audio(self, text):
         tts = gTTS(text)
