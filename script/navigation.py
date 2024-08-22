@@ -28,7 +28,7 @@ class officeTour:
 	def __init__(self):
 		rospy.on_shutdown(self.cleanup)
 		
-		self.task_exec = False
+		self.task_exec = True
 		self.description = ""
 
 		# ================== INITIALIZATION ================== 
@@ -44,10 +44,11 @@ class officeTour:
 		# A variable to hold the initial pose of the robot to be set by the user in RViz
 		initial_pose = PoseWithCovarianceStamped()
 		rospy.Subscriber('initialpose', PoseWithCovarianceStamped, self.update_initial_pose)
-		
+		location_pub1 = rospy.Publisher('location_table', String, queue_size=10)
+		location_pub2 = rospy.Publisher('location_rack',String,queue_size=10)
 		# Subscribe for the tast_status for all task
 		rospy.Subscriber('task_status', String, self.task_status_callback)
-
+		
 		# Get the initial pose from the user
 		rospy.loginfo("*** Click the 2D Pose Estimate button in RViz to set the robot's initial pose...")
 		rospy.wait_for_message('initialpose', PoseWithCovarianceStamped)
@@ -64,8 +65,9 @@ class officeTour:
 		# run amcl, rostopic echo /amcl_pose 
 		locations = dict()
 		
-		coordinate1 = [3.02571, 0.30116, 0.08340, 0.99652]
-			
+		coordinate1 = [2.87095, 0.28711, 0.08880, 0.99604]
+		coordinate2 = [2.47440, -0.7087, -0.54361, 0.83934]
+
 		# Start navigate to destination flow 
 		self.goal = MoveBaseGoal()
 		rospy.loginfo("Start Navigation")
@@ -74,7 +76,9 @@ class officeTour:
 		rospy.sleep(2)
 		
 		self.navigate(coordinate1)
-		self.task_exec = True
+
+		# location_table
+		location_pub1.publish("True")
 		
 		rospy.loginfo("Doing task ---- Waiting for people")
 		while self.task_exec and not rospy.is_shutdown():
@@ -83,6 +87,19 @@ class officeTour:
 		rospy.loginfo("Task completed")
 		rospy.sleep(2)
 		
+		self.navigate(coordinate2)
+		
+		# location_rack
+		location_pub2.publish("True")
+
+		self.task_exec = True	
+		rospy.loginfo("Doing task ---- Waiting for ai and arm put objects into rack")
+		while self.task_exec and not rospy.is_shutdown():
+			rospy.loginfo("Waiting for task to complete...")
+			rospy.sleep(1)
+		rospy.loginfo("Task completed")
+		rospy.sleep(2)
+
         # After visiting each corner, robot will go back to starting point
 		rospy.loginfo("Going back initial point")
 		rospy.sleep(2)
@@ -107,7 +124,7 @@ class officeTour:
 		
 	def task_status_callback(self,data):
 		status = data.data
-		if status == True:
+		if status == 'True':
 			self.task_exec = False
 			rospy.loginfo('Done performing task')
     
